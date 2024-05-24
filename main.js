@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -16,7 +16,7 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadURL('http://localhost:5173'); // Ensure the port matches Vite's port
+  mainWindow.loadURL('http://localhost:5173');
   mainWindow.webContents.openDevTools();
 }
 
