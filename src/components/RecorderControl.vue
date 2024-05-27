@@ -30,55 +30,97 @@ const props = defineProps<{ isRecordingMeeting: boolean }>();
 const emit = defineEmits<{ 'recording-status': [boolean] }>();
 const title = ref('Let\'s record this meeting');
 const timerMessage = 'This meeting has been going on ';
-const mediaRecorder = ref<MediaRecorder | null>(null);
-const audioChunks: Blob[] = [];
+let mediaRecorder: MediaRecorder | null = null;
+let stream: MediaStream | null = null;
+let recordingQueue: Promise<void> = Promise.resolve();
+let chunkCounter = 1;
+let isRecording = false;
+let recordingFolderPath: string;
 
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
 async function startRecordingMeeting(): Promise<void> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  mediaRecorder.value = new MediaRecorder(stream);
+  stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  isRecording = true;
+  emit('recording-status', true);
+  chunkCounter = 1;
 
-  mediaRecorder.value.ondataavailable = (event) => {
-    audioChunks.push(event.data);
+  // Determine the next recording folder name
+  const documentsPath = path.join(os.homedir(), 'Documents', 'Decyphr');
+  if (!fs.existsSync(documentsPath)) {
+    fs.mkdirSync(documentsPath, { recursive: true });
+  }
+
+  const date = new Date();
+  const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
+
+  let recordingNumber = 1;
+  while (fs.existsSync(path.join(documentsPath, `Recording-${recordingNumber}-${dateString}`))) {
+    recordingNumber++;
+  }
+
+  recordingFolderPath = path.join(documentsPath, `Recording-${recordingNumber}-${dateString}`);
+  fs.mkdirSync(recordingFolderPath, { recursive: true });
+
+  recordChunk();
+}
+
+function recordChunk(): void {
+  if (!stream) return;
+
+  mediaRecorder = new MediaRecorder(stream);
+  const localChunks: Blob[] = [];
+
+  mediaRecorder.ondataavailable = (event) => {
+    localChunks.push(event.data);
   };
 
-  mediaRecorder.value.onstop = async () => {
-    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+  mediaRecorder.onstop = async () => {
+    const audioBlob = new Blob(localChunks, { type: 'audio/wav' });
     const arrayBuffer = await audioBlob.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const documentsPath = path.join(os.homedir(), 'Documents', 'Decyphr');
-    if (!fs.existsSync(documentsPath)) {
-      fs.mkdirSync(documentsPath, { recursive: true });
+    // Enqueue the saving process to ensure it runs sequentially
+    recordingQueue = recordingQueue.then(() => saveRecordingChunk(buffer));
+
+    // Start the next chunk if still recording
+    if (isRecording) {
+      recordChunk();
     }
-
-    const date = new Date();
-    const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
-    const timeString = date.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-mm-ss
-    const folderName = `${dateString}-T-${timeString.substring(0, 5)}-Recording`;
-
-    const recordingPath = path.join(documentsPath, folderName);
-    if (!fs.existsSync(recordingPath)) {
-      fs.mkdirSync(recordingPath, { recursive: true });
-    }
-
-    const filePath = path.join(recordingPath, `${folderName}.wav`);
-    fs.writeFile(filePath, buffer, () => console.log('Recording saved at', filePath));
   };
 
-  mediaRecorder.value.start();
-  emit('recording-status', true);
+  mediaRecorder.start();
+
+  setTimeout(() => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
+    }
+  }, 30000); // Stop after 30 seconds
+}
+
+async function saveRecordingChunk(buffer: Buffer): Promise<void> {
+  const now = new Date();
+  const dateString = now.toISOString().split('T')[0]; // YYYY-MM-DD
+  const timeString = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-mm-ss
+  const fileName = `Chunk-${chunkCounter}-${dateString}-T-${timeString}.wav`;
+  const filePath = path.join(recordingFolderPath, fileName);
+
+  fs.writeFile(filePath, buffer, () => console.log('Recording saved at', filePath));
+  chunkCounter++;
 }
 
 function stopRecordingMeeting(duration: string): void {
-  if (mediaRecorder.value) {
-    mediaRecorder.value.stop();
-    title.value = 'The meeting concluded after ' + duration + '. Click the mic to start another meeting!';
-    emit('recording-status', false);
+  isRecording = false;
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
   }
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+  }
+  title.value = 'The meeting concluded after ' + duration + '. Click the mic to start another meeting!';
+  emit('recording-status', false);
 }
 
 function resetTitle(): void {
