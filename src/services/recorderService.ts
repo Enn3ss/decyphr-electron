@@ -3,7 +3,8 @@ import {
     getTimeString,
     getFileName,
     getFilePath
-} from './utilityService.ts'
+} from './utilityService.ts';
+import { timerService } from './timerService.ts';
 
 class RecorderService {
     private mediaRecorder: MediaRecorder | null = null;
@@ -12,16 +13,13 @@ class RecorderService {
     private recordingFolderPath!: string;
     private isRecording: boolean = false;
     private chunkCounter: number = 1;
-    private chunkStartTime: number = 0;
-    private recordingInterval: number = 30000;
-    private timeoutId: number | null = null;
 
     public async startRecording(): Promise<void> {
         this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         this.recordingFolderPath = await window.electron.getRecordingFolderPath();
         this.isRecording = true;
         this.chunkCounter = 1;
-        this.recordingInterval = 30000;
+        timerService.start();
         this.recordChunk();
     }
 
@@ -29,15 +27,7 @@ class RecorderService {
         if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
             this.mediaRecorder.pause();
             this.isRecording = false;
-
-            // Clear the current timeout and calculate the remaining time
-            if (this.timeoutId !== null) {
-                clearTimeout(this.timeoutId);
-                this.timeoutId = null;
-            }
-
-            const elapsedTime = performance.now() - this.chunkStartTime;
-            this.recordingInterval -= elapsedTime;
+            timerService.pause();
         }
     }
 
@@ -45,10 +35,7 @@ class RecorderService {
         if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
             this.mediaRecorder.resume();
             this.isRecording = true;
-
-            // Set the timeout for the remaining time
-            this.chunkStartTime = performance.now();
-            this.setChunkTimeout(this.recordingInterval);
+            timerService.resume();
         }
     }
 
@@ -60,10 +47,7 @@ class RecorderService {
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
         }
-        if (this.timeoutId !== null) {
-            clearTimeout(this.timeoutId);
-            this.timeoutId = null;
-        }
+        timerService.stop();
     }
 
     private recordChunk(): void {
@@ -83,26 +67,21 @@ class RecorderService {
             this.recordingQueue = this.recordingQueue.then(() => this.saveRecordingChunk(arrayBuffer));
 
             if (this.isRecording) {
-                this.recordingInterval = 30000; // Reset remaining time for the next chunk
                 this.recordChunk();
             }
         };
 
         this.mediaRecorder.start();
-        this.chunkStartTime = performance.now();
-
-        if (this.timeoutId !== null) {
-            clearTimeout(this.timeoutId);
-        }
-        this.setChunkTimeout(this.recordingInterval);
+        timerService.subscribe(this.handleChunkTimeout.bind(this));
     }
 
-    private setChunkTimeout(duration: number): void {
-        this.timeoutId = window.setTimeout(() => {
-            if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-                this.mediaRecorder.stop();
-            }
-        }, duration);
+    private handleChunkTimeout(elapsed: number): void {
+        const duration = 30000; // 30 seconds in milliseconds
+        if (elapsed >= duration && this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+            this.mediaRecorder.stop();
+            timerService.stop();
+            timerService.start();
+        }
     }
 
     private async saveRecordingChunk(buffer: ArrayBuffer): Promise<void> {
