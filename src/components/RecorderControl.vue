@@ -16,6 +16,7 @@
       <TimerControl
         :message="timerMessage"
         @timer-stopped="stopRecordingMeeting"
+        @toggle-pause="togglePause"
       />
     </div>
   </div>
@@ -41,6 +42,15 @@ function stopRecordingMeeting(duration: string): void {
   recorderService.stopRecording();
   title.value = 'The meeting concluded after ' + duration + '. Click the mic to start another meeting!';
   emit('recording-status', false);
+}
+
+function togglePause(isPaused: boolean): void {
+  if(isPaused) {
+    recorderService.pauseRecording();
+  }
+  else if(!isPaused) {
+    recorderService.resumeRecording();
+  }
 }
 
 function resetTitle(): void {
