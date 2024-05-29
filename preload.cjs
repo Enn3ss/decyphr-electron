@@ -5,7 +5,6 @@ contextBridge.exposeInMainWorld('electron', {
   saveRecordingChunk: (filePath, buffer) => ipcRenderer.invoke('saveRecordingChunk', filePath, buffer),
 });
 
-
 window.addEventListener('DOMContentLoaded', () => {
   const replaceText = (selector, text) => {
     const element = document.getElementById(selector);

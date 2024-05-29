@@ -26,7 +26,7 @@
 import { ref } from 'vue';
 import MicIcon from '/src/assets/icons/microphone-solid.svg';
 import TimerControl from './TimerControl.vue';
-import { recorderService } from './recorderService.ts';
+import { recorderService } from '../services/recorderService.ts';
 
 const props = defineProps<{ isRecordingMeeting: boolean }>();
 const emit = defineEmits<{ 'recording-status': [boolean] }>();

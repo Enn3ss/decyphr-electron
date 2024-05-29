@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { fileURLToPath } from 'url';
-import { getDateString } from 'src/components/utilityService.ts'
+import { getDateString } from 'src/services/utilityService.ts'
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
