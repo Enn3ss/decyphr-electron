@@ -1,6 +1,8 @@
-import { app, BrowserWindow } from 'electron';
-import * as path from 'path';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { fileURLToPath } from 'url';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,12 +13,12 @@ function createWindow() {
     height: 600,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
-      nodeIntegration: true,
-      contextIsolation: false,
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   });
 
-  mainWindow.loadURL('http://localhost:5173'); // Ensure the port matches Vite's port
+  mainWindow.loadURL('http://localhost:5173');
   mainWindow.webContents.openDevTools();
 }
 
@@ -32,4 +34,33 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+
+ipcMain.handle('getRecordingFolderPath', async () => {
+  const documentsPath = path.join(os.homedir(), 'Documents', 'Decyphr');
+  if (!fs.existsSync(documentsPath)) {
+    fs.mkdirSync(documentsPath, { recursive: true });
+  }
+
+  const date = new Date();
+  const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
+  
+  let recordingNumber = 1;
+  while (fs.existsSync(path.join(documentsPath, `Recording-${recordingNumber}-${dateString}`))) {
+    recordingNumber++;
+  }
+
+  const recordingFolderPath = path.join(documentsPath, `Recording-${recordingNumber}-${dateString}`);
+  fs.mkdirSync(recordingFolderPath, { recursive: true });
+
+  return recordingFolderPath;
+});
+
+ipcMain.handle('saveRecordingChunk', async (_event, filePath, buffer) => {
+  return new Promise((resolve, reject) => {
+      fs.writeFile(filePath, Buffer.from(buffer), (err) => {
+          if (err) reject(err);
+          else resolve();
+      });
+  });
 });

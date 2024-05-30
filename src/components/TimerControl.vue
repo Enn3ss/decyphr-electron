@@ -16,58 +16,63 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { timerService } from '../services/timerService.ts';
+import { formatMilitaryTime } from '../services/utilityService.ts';
 import PauseIcon from '/src/assets/icons/circle-pause-solid.svg';
 import PlayIcon from '/src/assets/icons/circle-play-solid.svg';
 import StopIcon from '/src/assets/icons/circle-stop-solid.svg';
 
 const props = defineProps<{ message: string }>();
-const emit = defineEmits<{ 'timer-stopped': [string] }>();
+const emit = defineEmits<{ 'timer-stopped': [string], 'toggle-pause': [boolean] }>();
 const isPaused = ref(false);
-const intervalId = ref<number | null>(null);
 const elapsedTime = ref(0);
+const totalElapsedTime = ref(0);
+let intervalId: number | null = null;
 
 const timeDisplay = computed(() => {
-  const hours = Math.floor(elapsedTime.value / 3600);
-  const minutes = Math.floor((elapsedTime.value % 3600) / 60);
-  const seconds = elapsedTime.value % 60;
-  return `${padZero(hours)}:${padZero(minutes)}:${padZero(seconds)}`;
+  return formatMilitaryTime(totalElapsedTime.value);
 });
 
-function padZero(value: number): string {
-  return value.toString().padStart(2, '0');
-}
-
-function startTimer(): void {
-  // setInterval is a browser API that allows functions to execute repeatedly at the given interval
-  intervalId.value = window.setInterval(() => {
-    if (!isPaused.value) {
-      elapsedTime.value++;
-    }
-  }, 1000);
-}
-
 function togglePause(): void {
-    isPaused.value = !isPaused.value;
-    console.log('duration: ' + timeDisplay.value);
+  isPaused.value = !isPaused.value;
+  if (isPaused.value) {
+    timerService.pause();
+    clearInterval(intervalId as number);
+  } else {
+    timerService.resume();
+    startInternalTimer();
+  }
+  emit('toggle-pause', isPaused.value);
 }
 
 function stopTimer(): void {
-  if (intervalId.value) {
-    const duration = timeDisplay.value;
-    clearInterval(intervalId.value);
-    intervalId.value = null;
-    elapsedTime.value = 0;
-    isPaused.value = false;
-    emit('timer-stopped', duration);
-  }
+  timerService.stop();
+  clearInterval(intervalId as number);
+  emit('timer-stopped', timeDisplay.value);
 }
 
-startTimer();
+function updateElapsedTime(elapsed: number): void {
+  elapsedTime.value = Math.floor(elapsed / 1000);
+}
+
+function startInternalTimer(): void {
+  intervalId = window.setInterval(() => {
+    totalElapsedTime.value++;
+  }, 1000);
+}
+
+onMounted(() => {
+  timerService.subscribe(updateElapsedTime);
+  totalElapsedTime.value = Math.floor(timerService.getElapsed() / 1000);
+  if (!isPaused.value) {
+    startInternalTimer();
+  }
+});
 
 onUnmounted(() => {
-  if (intervalId.value) {
-    clearInterval(intervalId.value);
-  }
+  clearInterval(intervalId as number);
+  timerService.unsubscribe(updateElapsedTime);
+  timerService.stop();
 });
 </script>

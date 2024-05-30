@@ -12,6 +12,7 @@
     "electron:build": "electron-builder"
   },
   "dependencies": {
+    "@types/node": "^20.12.12",
     "vue": "^3.4.21"
   },
   "devDependencies": {
