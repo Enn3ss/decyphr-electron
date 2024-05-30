@@ -84,13 +84,12 @@ class RecorderService {
         }
     }
 
-    private async saveRecordingChunk(buffer: ArrayBuffer): Promise<void> {
+    private async saveRecordingChunk(arrayBuffer: ArrayBuffer): Promise<void> {
         const dateString = getDateString();
         const timeString = getTimeString();
         const fileName = getFileName(this.chunkCounter, dateString, timeString);
         const filePath = getFilePath(this.recordingFolderPath, fileName);
-
-        await window.electron.saveRecordingChunk(filePath, buffer);
+        await window.electron.saveRecordingChunk(filePath, arrayBuffer);
         this.chunkCounter++;
     }
 }

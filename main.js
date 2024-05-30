@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import { fileURLToPath } from 'url';
-import { getDateString } from 'src/services/utilityService.ts'
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -43,7 +42,9 @@ ipcMain.handle('getRecordingFolderPath', async () => {
     fs.mkdirSync(documentsPath, { recursive: true });
   }
 
-  const dateString = getDateString();
+  const date = new Date();
+  const dateString = date.toISOString().split('T')[0]; // YYYY-MM-DD
+  
   let recordingNumber = 1;
   while (fs.existsSync(path.join(documentsPath, `Recording-${recordingNumber}-${dateString}`))) {
     recordingNumber++;
@@ -55,11 +56,11 @@ ipcMain.handle('getRecordingFolderPath', async () => {
   return recordingFolderPath;
 });
 
-ipcMain.handle('saveRecordingChunk', async (filePath, buffer) => {
+ipcMain.handle('saveRecordingChunk', async (_event, filePath, buffer) => {
   return new Promise((resolve, reject) => {
-    fs.writeFile(filePath, Buffer.from(buffer), (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
+      fs.writeFile(filePath, Buffer.from(buffer), (err) => {
+          if (err) reject(err);
+          else resolve();
+      });
   });
 });
